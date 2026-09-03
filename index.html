@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiet File Transfer - 音響通信ファイル転送</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #0f0f23;
+    color: #e0e0e0;
+  }
+  h1 { font-size: 1.4rem; text-align: center; color: #00ff88; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 24px; }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .tab {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #333;
+    background: #1a1a2e;
+    color: #888;
+    cursor: pointer;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    background: #16213e;
+    color: #00ff88;
+    border-color: #00ff88;
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  
+  .card {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 12px 0; color: #00ccff; }
+  
+  input[type="file"] {
+    width: 100%;
+    padding: 12px;
+    background: #0f0f23;
+    border: 2px dashed #444;
+    border-radius: 8px;
+    color: #ccc;
+    cursor: pointer;
+  }
+  input[type="file"]:hover { border-color: #00ff88; }
+  
+  button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #00ff88, #00cc66);
+    color: #000;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-primary:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-danger {
+    background: linear-gradient(135deg, #ff4444, #cc0000);
+    color: #fff;
+  }
+  .btn-secondary {
+    background: #16213e;
+    color: #00ccff;
+    border: 1px solid #00ccff;
+  }
+  
+  .progress-container {
+    margin-top: 16px;
+    background: #0f0f23;
+    border-radius: 8px;
+    overflow: hidden;
+    height: 28px;
+    border: 1px solid #333;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #00ff88, #00ccff);
+    width: 0%;
+    transition: width 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #000;
+  }
+  
+  .log {
+    margin-top: 12px;
+    padding: 12px;
+    background: #0f0f23;
+    border-radius: 8px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 0.8rem;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #333;
+    color: #aaa;
+  }
+  .log .ok { color: #00ff88; }
+  .log .warn { color: #ffaa00; }
+  .log .err { color: #ff4444; }
+  .log .info { color: #00ccff; }
+  
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .stat-box {
+    background: #0f0f23;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid #333;
+  }
+  .stat-box .val { font-size: 1.2rem; font-weight: bold; color: #00ff88; }
+  .stat-box .lbl { font-size: 0.7rem; color: #888; margin-top: 4px; }
+  
+  .file-list {
+    margin-top: 12px;
+  }
+  .file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: #0f0f23;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid #333;
+  }
+  .file-item .name { font-weight: 600; color: #fff; }
+  .file-item .size { color: #888; font-size: 0.8rem; }
+  
+  .mode-select {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 8px;
+    background: #0f0f23;
+    border: 1px solid #444;
+    color: #888;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .mode-btn.active {
+    border-color: #00ff88;
+    color: #00ff88;
+    background: #16213e;
+  }
+  
+  @media (max-width: 480px) {
+    body { padding: 12px; }
+    h1 { font-size: 1.1rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🔊 Quiet File Transfer</h1>
+<div class="subtitle">音響通信でファイルを秘密裏に転送</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('send')">📤 送信</div>
+  <div class="tab" onclick="switchTab('receive')">📥 受信</div>
+</div>
+
+<!-- 送信パネル -->
+<div id="panel-send" class="panel active">
+  <div class="card">
+    <h2>1. ファイルを選択</h2>
+    <input type="file" id="fileInput" onchange="onFileSelected(event)">
+    <div id="fileInfo" class="file-list"></div>
+  </div>
+  
+  <div class="card">
+    <h2>2. 通信モード</h2>
+    <div class="mode-select">
+      <button class="mode-btn active" onclick="setMode('ultrasonic')" id="mode-ultrasonic">超音波<br><small>人間には聞こえない</small></button>
+      <button class="mode-btn" onclick="setMode('audible')" id="mode-audible">可聴域<br><small>安定して通信</small></button>
+    </div>
+    <div class="stats">
+      <div class="stat-box"><div class="val" id="pktSize">80</div><div class="lbl">バイト/パケット</div></div>
+      <div class="stat-box"><div class="val" id="pktCount">-</div><div class="lbl">総パケット数</div></div>
+    </div>
+  </div>
+  
+  <div class="card">
+    <h2>3. 送信</h2>
+    <button class="btn-primary" id="sendBtn" onclick="startSend()" disabled>ファイルを送信</button>
+    <button class="btn-danger" id="stopBtn" onclick="stopSend()" style="display:none;margin-top:8px;">送信を中止</button>
+    <div class="progress-container">
+      <div class="progress-bar" id="sendProgress">0%</div>
+    </div>
+    <div class="log" id="sendLog">準備完了。ファイルを選択してください。</div>
+  </div>
+</div>
+
+<!-- 受信パネル -->
+<div id="panel-receive" class="panel">
+  <div class="card">
+    <h2>1. 通信モード</h2>
+    <div class="mode-select">
+      <button class="mode-btn active" onclick="setRxMode('ultrasonic')" id="rxmode-ultrasonic">超音波</button>
+      <button class="mode-btn" onclick="setRxMode('audible')" id="rxmode-audible">可聴域</button>
+    </div>
+    <button class="btn-primary" id="recvBtn" onclick="startReceive()">受信を開始</button>
+    <button class="btn-danger" id="stopRecvBtn" onclick="stopReceive()" style="display:none;margin-top:8px;">受信を停止</button>
+  </div>
+  
+  <div class="card">
+    <h2>2. 受信状況</h2>
+    <div class="stats">
+      <div class="stat-box"><div class="val" id="rxPackets">0</div><div class="lbl">受信パケット</div></div>
+      <div class="stat-box"><div class="val" id="rxTotal">-</div><div class="lbl">総パケット数</div></div>
+    </div>
+    <div class="progress-container">
+      <div class="progress-bar" id="recvProgress">0%</div>
+    </div>
+    <div class="log" id="recvLog">受信を開始するには「受信を開始」を押してください。</div>
+  </div>
+  
+  <div class="card" id="downloadCard" style="display:none;">
+    <h2>3. ファイル復元</h2>
+    <div id="recvFileInfo"></div>
+    <button class="btn-secondary" onclick="downloadFile()">📥 ファイルをダウンロード</button>
+  </div>
+</div>
+
+<script src="https://quiet.github.io/quiet-js/javascripts/quiet.js"></script>
+<script>
+// ============================================
+// Quiet File Transfer - 音響通信ファイル転送
+// ============================================
+
+let currentMode = 'ultrasonic';
+let rxMode = 'ultrasonic';
+let selectedFile = null;
+let fileBase64 = '';
+let packets = [];
+let sendInterval = null;
+let currentPacketIndex = 0;
+let transmitter = null;
+let receiver = null;
+let isSending = false;
+let isReceiving = false;
+
+let receivedPackets = {};
+let receivedMeta = null;
+let totalExpected = 0;
+
+// パケットサイズ設定（Base64後の文字数）
+const PACKET_SIZES = {
+  ultrasonic: 80,
+  audible: 120
+};
+
+// Quiet.js 初期化
+Quiet.setProfilesPrefix("https://quiet.github.io/quiet-js/profiles/");
+Quiet.setLibfecPrefix("https://quiet.github.io/quiet-js/");
+
+function log(id, msg, type='info') {
+  const el = document.getElementById(id);
+  const span = document.createElement('div');
+  span.className = type;
+  const time = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+  span.textContent = `[${time}] ${msg}`;
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('#panel-send .mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mode-' + mode).classList.add('active');
+  document.getElementById('pktSize').textContent = PACKET_SIZES[mode];
+  if (selectedFile) updatePacketCount();
+}
+
+function setRxMode(mode) {
+  rxMode = mode;
+  document.querySelectorAll('#panel-receive .mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('rxmode-' + mode).classList.add('active');
+}
+
+function onFileSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedFile = file;
+  
+  const info = document.getElementById('fileInfo');
+  info.innerHTML = `
+    <div class="file-item">
+      <div>
+        <div class="name">${file.name}</div>
+        <div class="size">${formatBytes(file.size)}</div>
+      </div>
+    </div>
+  `;
+  
+  log('sendLog', `ファイル選択: ${file.name} (${formatBytes(file.size)})`, 'ok');
+  
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const arrayBuffer = evt.target.result;
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    fileBase64 = btoa(binary);
+    updatePacketCount();
+    document.getElementById('sendBtn').disabled = false;
+    log('sendLog', `Base64変換完了: ${fileBase64.length} 文字`, 'ok');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function updatePacketCount() {
+  const size = PACKET_SIZES[currentMode];
+  // ヘッダー分を考慮（実際のペイロードは少し小さく）
+  const payloadSize = size - 40; // ヘッダー用に余裕を持たせる
+  const count = Math.ceil(fileBase64.length / payloadSize);
+  document.getElementById('pktCount').textContent = count;
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  return (b/(1024*1024)).toFixed(1) + ' MB';
+}
+
+// ============================================
+// 送信処理
+// ============================================
+function buildPackets() {
+  const payloadSize = PACKET_SIZES[currentMode] - 40;
+  const filename = selectedFile.name;
+  const total = Math.ceil(fileBase64.length / payloadSize);
+  packets = [];
+  
+  // メタデータパケット（先頭）
+  const meta = {
+    type: 'META',
+    filename: filename,
+    filesize: selectedFile.size,
+    total: total,
+    mode: currentMode
+  };
+  packets.push(JSON.stringify(meta));
+  
+  // データパケット
+  for (let i = 0; i < total; i++) {
+    const chunk = fileBase64.substring(i * payloadSize, (i + 1) * payloadSize);
+    const pkt = {
+      type: 'DATA',
+      seq: i,
+      total: total,
+      data: chunk
+    };
+    packets.push(JSON.stringify(pkt));
+  }
+  
+  // EOFパケット（終了マーカー）
+  packets.push(JSON.stringify({type: 'EOF'}));
+  
+  log('sendLog', `パケット生成完了: ${packets.length}個（データ${total}個 + メタ・EOF）`, 'ok');
+}
+
+function startSend() {
+  if (!fileBase64) return;
+  
+  buildPackets();
+  isSending = true;
+  currentPacketIndex = 0;
+  
+  document.getElementById('sendBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = 'block';
+  
+  log('sendLog', `Quietモード「${currentMode}」で送信開始...`, 'info');
+  
+  Quiet.addReadyCallback(function() {
+    transmitter = Quiet.transmitter({
+      profile: currentMode,
+      onFinish: function() {
+        // 1パケット送信完了 → 次へ
+        if (!isSending) return;
+        currentPacketIndex++;
+        updateSendProgress();
+        
+        if (currentPacketIndex >= packets.length) {
+          log('sendLog', 'すべてのパケットを送信しました！', 'ok');
+          stopSend();
+          return;
+        }
+        
+        // インターバル（パケット間の間隔）
+        setTimeout(sendNextPacket, 800);
+      },
+      onCreateFailed: function(reason) {
+        log('sendLog', '送信器の作成に失敗: ' + reason, 'err');
+        stopSend();
+      }
+    });
+    
+    // 最初のパケットを送信
+    setTimeout(sendNextPacket, 500);
+  });
+}
+
+function sendNextPacket() {
+  if (!isSending || !transmitter) return;
+  const pkt = packets[currentPacketIndex];
+  const textEncoder = new TextEncoder();
+  const payload = textEncoder.encode(pkt);
+  
+  log('sendLog', `送信 [${currentPacketIndex + 1}/${packets.length}] ${pkt.length}文字`, 'info');
+  transmitter.transmit(Quiet.transmitterPayload({payload: payload}));
+}
+
+function updateSendProgress() {
+  const pct = Math.round((currentPacketIndex / packets.length) * 100);
+  const bar = document.getElementById('sendProgress');
+  bar.style.width = pct + '%';
+  bar.textContent = pct + '%';
+}
+
+function stopSend() {
+  isSending = false;
+  if (transmitter) {
+    transmitter.destroy();
+    transmitter = null;
+  }
+  document.getElementById('sendBtn').style.display = 'block';
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('sendProgress').style.width = '0%';
+  document.getElementById('sendProgress').textContent = '0%';
+}
+
+// ============================================
+// 受信処理
+// ============================================
+function startReceive() {
+  receivedPackets = {};
+  receivedMeta = null;
+  totalExpected = 0;
+  isReceiving = true;
+  
+  document.getElementById('recvBtn').style.display = 'none';
+  document.getElementById('stopRecvBtn').style.display = 'block';
+  document.getElementById('downloadCard').style.display = 'none';
+  document.getElementById('rxPackets').textContent = '0';
+  document.getElementById('rxTotal').textContent = '-';
+  document.getElementById('recvProgress').style.width = '0%';
+  document.getElementById('recvProgress').textContent = '0%';
+  document.getElementById('recvLog').innerHTML = '';
+  
+  log('recvLog', `Quietモード「${rxMode}」で受信開始...`, 'info');
+  log('recvLog', 'マイクへのアクセスを許可してください。', 'warn');
+  
+  Quiet.addReadyCallback(function() {
+    receiver = Quiet.receiver({
+      profile: rxMode,
+      onReceive: function(payload) {
+        if (!isReceiving) return;
+        handleReceive(payload);
+      },
+      onCreateFailed: function(reason) {
+        log('recvLog', '受信器の作成に失敗: ' + reason, 'err');
+        stopReceive();
+      },
+      onReceiveFailed: function(num_fails) {
+        // デコード失敗（ノイズなど）— 無視
+      }
+    });
+    
+    log('recvLog', '受信器を起動しました。音を待っています...', 'ok');
+  });
+}
+
+function handleReceive(payload) {
+  const textDecoder = new TextDecoder('utf-8');
+  let text;
+  try {
+    text = textDecoder.decode(payload);
+  } catch(e) {
+    return; // デコード失敗
+  }
+  
+  let pkt;
+  try {
+    pkt = JSON.parse(text);
+  } catch(e) {
+    return; // JSONパース失敗
+  }
+  
+  if (pkt.type === 'META') {
+    receivedMeta = pkt;
+    totalExpected = pkt.total;
+    document.getElementById('rxTotal').textContent = totalExpected;
+    log('recvLog', `メタデータ受信: ${pkt.filename} (${formatBytes(pkt.filesize)})`, 'ok');
+    return;
+  }
+  
+  if (pkt.type === 'EOF') {
+    log('recvLog', 'EOFパケット受信。ファイルを復元します...', 'info');
+    tryReconstruct();
+    return;
+  }
+  
+  if (pkt.type === 'DATA') {
+    if (receivedPackets[pkt.seq] === undefined) {
+      receivedPackets[pkt.seq] = pkt.data;
+      const count = Object.keys(receivedPackets).length;
+      document.getElementById('rxPackets').textContent = count;
+      
+      if (totalExpected > 0) {
+        const pct = Math.round((count / totalExpected) * 100);
+        const bar = document.getElementById('recvProgress');
+        bar.style.width = pct + '%';
+        bar.textContent = pct + '%';
+      }
+      
+      if (count % 10 === 0) {
+        log('recvLog', `進捗: ${count}/${totalExpected} パケット`, 'info');
+      }
+    }
+    return;
+  }
+}
+
+function tryReconstruct() {
+  if (!receivedMeta) {
+    log('recvLog', 'メタデータが未受信です。ファイルを復元できません。', 'err');
+    return;
+  }
+  
+  const count = Object.keys(receivedPackets).length;
+  if (count < totalExpected) {
+    log('recvLog', `パケット不足: ${count}/${totalExpected}。再送信を待機中...`, 'warn');
+    // 自動停止はせず、残りを待つ
+    return;
+  }
+  
+  // 復元
+  let base64 = '';
+  for (let i = 0; i < totalExpected; i++) {
+    if (receivedPackets[i] === undefined) {
+      log('recvLog', `パケット ${i} が欠落しています。`, 'err');
+      return;
+    }
+    base64 += receivedPackets[i];
+  }
+  
+  // Base64 → バイナリ
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    
+    window.reconstructedBlob = new Blob([bytes]);
+    window.reconstructedFilename = receivedMeta.filename;
+    
+    const info = document.getElementById('recvFileInfo');
+    info.innerHTML = `
+      <div class="file-item">
+        <div>
+          <div class="name">${receivedMeta.filename}</div>
+          <div class="size">${formatBytes(receivedMeta.filesize)} → ${formatBytes(window.reconstructedBlob.size)}</div>
+        </div>
+      </div>
+    `;
+    
+    document.getElementById('downloadCard').style.display = 'block';
+    log('recvLog', 'ファイル復元完了！ダウンロード可能です。', 'ok');
+    
+  } catch(e) {
+    log('recvLog', '復元エラー: ' + e.message, 'err');
+  }
+}
+
+function downloadFile() {
+  if (!window.reconstructedBlob) return;
+  const url = URL.createObjectURL(window.reconstructedBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = window.reconstructedFilename || 'received_file';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  log('recvLog', 'ダウンロードを開始しました。', 'ok');
+}
+
+function stopReceive() {
+  isReceiving = false;
+  if (receiver) {
+    receiver.destroy();
+    receiver = null;
+  }
+  document.getElementById('recvBtn').style.display = 'block';
+  document.getElementById('stopRecvBtn').style.display = 'none';
+}
+
+// 初期ログ
+log('sendLog', 'Quiet.js を読み込み中...', 'info');
+</script>
+
+</body>
+</html>
