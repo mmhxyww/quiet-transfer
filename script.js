@@ -17,6 +17,7 @@ let isReceiving = false;
 let receivedPackets = {};
 let receivedMeta = null;
 let totalExpected = 0;
+let receiveBuffer = '';
 
 // パケットサイズ設定（Base64後の文字数）
 const PACKET_SIZES = {
@@ -196,10 +197,10 @@ function sendNextPacket() {
   if (!isSending || !transmitter) return;
   const pkt = packets[currentPacketIndex];
   const textEncoder = new TextEncoder();
-  const payload = textEncoder.encode(pkt);
+  const payload = textEncoder.encode(pkt + '\n');
   
   log('sendLog', `送信 [${currentPacketIndex + 1}/${packets.length}] ${pkt.length}文字`, 'info');
-  transmitter.transmit(payload);
+  transmitter.transmit(payload.buffer);
 }
 
 function updateSendProgress() {
@@ -228,6 +229,7 @@ function startReceive() {
   receivedPackets = {};
   receivedMeta = null;
   totalExpected = 0;
+  receiveBuffer = '';
   isReceiving = true;
   
   document.getElementById('recvBtn').style.display = 'none';
@@ -268,20 +270,27 @@ function startReceive() {
 
 function handleReceive(payload) {
   const textDecoder = new TextDecoder('utf-8');
-  let text;
-  try {
-    text = textDecoder.decode(payload);
-  } catch(e) {
-    return; // デコード失敗
+  receiveBuffer += textDecoder.decode(payload);
+
+  const messages = receiveBuffer.split('\n');
+  receiveBuffer = messages.pop() || '';
+
+  for (const message of messages) {
+    if (!message) continue;
+
+    let pkt;
+    try {
+      pkt = JSON.parse(message);
+    } catch (e) {
+      log('recvLog', '受信パケットのJSON解析に失敗しました。', 'warn');
+      continue;
+    }
+
+    processReceivedPacket(pkt);
   }
-  
-  let pkt;
-  try {
-    pkt = JSON.parse(text);
-  } catch(e) {
-    return; // JSONパース失敗
-  }
-  
+}
+
+function processReceivedPacket(pkt) {
   if (pkt.type === 'META') {
     receivedMeta = pkt;
     totalExpected = pkt.total;
@@ -313,7 +322,6 @@ function handleReceive(payload) {
         log('recvLog', `進捗: ${count}/${totalExpected} パケット`, 'info');
       }
     }
-    return;
   }
 }
 
