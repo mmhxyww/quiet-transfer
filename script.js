@@ -25,8 +25,16 @@ const PACKET_SIZES = {
 };
 
 // Quiet.js 初期化
-Quiet.setProfilesPrefix("https://quiet.github.io/quiet-js/profiles/");
-Quiet.setLibfecPrefix("https://quiet.github.io/quiet-js/");
+const QUIET_ASSET_BASE_URL = "https://quiet.github.io/quiet-js/javascripts/";
+
+Quiet.init({
+  profilesPrefix: QUIET_ASSET_BASE_URL,
+  memoryInitializerPrefix: QUIET_ASSET_BASE_URL,
+  libfecPrefix: QUIET_ASSET_BASE_URL,
+  onError: function(reason) {
+    log('sendLog', 'Quiet.jsの初期化に失敗: ' + reason, 'err');
+  }
+});
 
 function log(id, msg, type='info') {
   const el = document.getElementById(id);
@@ -191,7 +199,7 @@ function sendNextPacket() {
   const payload = textEncoder.encode(pkt);
   
   log('sendLog', `送信 [${currentPacketIndex + 1}/${packets.length}] ${pkt.length}文字`, 'info');
-  transmitter.transmit(Quiet.transmitterPayload({payload: payload}));
+  transmitter.transmit(payload);
 }
 
 function updateSendProgress() {
