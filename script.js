@@ -249,16 +249,20 @@ function startReceive() {
         if (!isReceiving) return;
         handleReceive(payload);
       },
-      onCreateFailed: function(reason) {
+      onCreate: function() {
+        log('recvLog', '受信器を起動しました。音を待っています...', 'ok');
+      },
+      onCreateFail: function(reason) {
         log('recvLog', '受信器の作成に失敗: ' + reason, 'err');
         stopReceive();
       },
-      onReceiveFailed: function(num_fails) {
-        // デコード失敗（ノイズなど）— 無視
+      onReceiveFail: function(numFails) {
+        log('recvLog', `デコード失敗: 累計${numFails}回`, 'warn');
       }
     });
-    
-    log('recvLog', '受信器を起動しました。音を待っています...', 'ok');
+  }, function(reason) {
+    log('recvLog', 'Quiet.jsの初期化に失敗: ' + reason, 'err');
+    stopReceive();
   });
 }
 
